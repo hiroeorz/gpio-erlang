@@ -1,0 +1,5 @@
+%% encoding: UTF-8
+{application,edown}.
+{packages,[]}.
+{modules,[gpio_app,gpio_pin,gpio_pin_db,gpio_pin_event,gpio_pin_event_logger,
+          gpio_pin_event_relay,gpio_port,gpio_sup]}.

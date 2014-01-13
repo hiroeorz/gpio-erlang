@@ -1,0 +1,3 @@
+#!/bin/sh
+
+sudo erl -pa ebin deps/*/ebin -boot start_sasl -sname gpio -setcookie gpio
