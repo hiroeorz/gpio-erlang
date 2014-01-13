@@ -34,7 +34,7 @@ $ ./rebar get-deps
 
 ## Running
 
-check [default setting of gpio](blob/master/src/gpio.app.src).
+check [default setting of gpio](https://github.com/hiroeorz/gpio-erlang/blob/master/src/gpio.app.src).
 
 In default setting, gpio 25,27 is output pin, other is input pin.
 
@@ -149,7 +149,7 @@ The sample_module is event handler befavior of gen_event.
 If gpio18 set interrupt rising and pin status changed 0 to 1 , called event handler.
 
 This is sample event handler.
-[gpio_pin_event_logger.erl](blob/master/src/gpio_pin_event.erl)
+[gpio_pin_event_logger.erl](https://github.com/hiroeorz/gpio-erlang/blob/master/src/gpio_sample_event_handler.erl)
 
 
 ### Get all status list
