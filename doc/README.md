@@ -7,6 +7,7 @@
 
 
 <table width="100%" border="0" summary="list of modules">
+<tr><td><a href="http://github.com/hiroeorz/gpio-erlang/blob/master/doc/gpio.md" class="module">gpio</a></td></tr>
 <tr><td><a href="http://github.com/hiroeorz/gpio-erlang/blob/master/doc/gpio_app.md" class="module">gpio_app</a></td></tr>
 <tr><td><a href="http://github.com/hiroeorz/gpio-erlang/blob/master/doc/gpio_pin.md" class="module">gpio_pin</a></td></tr>
 <tr><td><a href="http://github.com/hiroeorz/gpio-erlang/blob/master/doc/gpio_pin_db.md" class="module">gpio_pin_db</a></td></tr>
