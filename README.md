@@ -150,11 +150,3 @@ If gpio18 set interrupt rising and pin status changed 0 to 1 , called event hand
 
 This is sample event handler.
 [gpio_pin_event_logger.erl](https://github.com/hiroeorz/gpio-erlang/blob/master/src/gpio_sample_event_handler.erl)
-
-
-### Get all status list
-
-```erl-sh
-1> gpio_pin:status().
-[1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
-```
