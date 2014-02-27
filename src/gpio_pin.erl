@@ -211,7 +211,7 @@ digital_change_notify(PinNo) ->
 %%--------------------------------------------------------------------
 init([{PinNo, Mode, Opts}]) ->
     Edge = proplists:get_value(edge, Opts, none), 
-    Pull = proplists:get_value(pull, Opts, none),
+    Pull = proplists:get_value(pull, Opts),
     ActiveLow = proplists:get_value(active_low, Opts),
     ok = unexport(PinNo), timer:sleep(300), %% waiting for file deleted...
     ok = export(PinNo),   timer:sleep(300), %% waiting for file created...
@@ -220,7 +220,8 @@ init([{PinNo, Mode, Opts}]) ->
     case Pull of
 	up   -> gpio_port:pullup(PinNo);
 	down -> gpio_port:pulldown(PinNo);
-	none -> gpio_port:pullnone(PinNo)
+	none -> gpio_port:pullnone(PinNo);
+	undefined -> ok
     end,
 
     case ActiveLow of
