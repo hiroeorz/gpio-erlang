@@ -69,6 +69,7 @@ pullnone(PinNo) ->
 init([C_Node]) ->
     _Pid = spawn_link(fun() ->
 			      CmdPass = priv_dir() ++ "/gpio_lib",
+			      os:cmd("killall " ++ "gpio_lib"),
 			      os:cmd(CmdPass),
 			      erlang:error(port_process_down)
 		      end),
