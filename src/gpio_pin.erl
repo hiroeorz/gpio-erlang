@@ -32,7 +32,7 @@
 
 -type mode() :: in | out.
 -type edge() :: falling | rising | both | none.
--type pull() :: up | down | none.
+-type pull() :: up | down | none | strong.
 
 -define(SERVER, ?MODULE).
 
@@ -119,7 +119,7 @@ set_int(PinNo, Mode) ->
 -spec pullup(PinNo) -> ok when
       PinNo :: non_neg_integer().
 pullup(PinNo) ->
-    gpio_port:pullup(PinNo).
+    gen_server:cast(get_child(PinNo), pullup).
 
 %%--------------------------------------------------------------------
 %% @doc set pulldown to a pin.
@@ -131,7 +131,7 @@ pullup(PinNo) ->
 -spec pulldown(PinNo) -> ok when
       PinNo :: non_neg_integer().
 pulldown(PinNo) ->
-    gpio_port:pulldown(PinNo).
+    gen_server:cast(get_child(PinNo), pulldown).
 
 %%--------------------------------------------------------------------
 %% @doc release pin mode from pullup pulldown.
@@ -143,7 +143,7 @@ pulldown(PinNo) ->
 -spec pullnone(PinNo) -> ok when
       PinNo :: non_neg_integer().
 pullnone(PinNo) ->
-    gpio_port:pullnone(PinNo).
+    gen_server:cast(get_child(PinNo), pullnone).
 
 %%--------------------------------------------------------------------
 %% @doc get active low from a pin.
@@ -218,9 +218,10 @@ init([{PinNo, Mode, Opts}]) ->
     ok = set_mode(PinNo, Mode), 
 
     case Pull of
-	up   -> gpio_port:pullup(PinNo);
-	down -> gpio_port:pulldown(PinNo);
-	none -> gpio_port:pullnone(PinNo);
+	up     -> set_pull(pullup,   PinNo);
+	down   -> set_pull(pulldown, PinNo);
+	none   -> set_pull(pullnone, PinNo);
+	strong -> set_pull(strong, PinNo);
 	undefined -> ok
     end,
 
@@ -310,7 +311,20 @@ handle_call({set_active_low, Mode}, _From, #state{pin_no = PinNo} = State) when
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast(_Msg, State) ->
+handle_cast(pullup, #state{pin_no = PinNo} = State) ->
+    set_pull(pullup, PinNo),
+    {noreply, State};
+
+handle_cast(pulldown, #state{pin_no = PinNo} = State) ->
+    set_pull(pulldown, PinNo),
+    {noreply, State};
+
+handle_cast(pullnone, #state{pin_no = PinNo} = State) ->
+    set_pull(pullnone, PinNo),
+    {noreply, State};
+
+handle_cast(strong, #state{pin_no = PinNo} = State) ->
+    set_pull(strong, PinNo),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -520,4 +534,54 @@ write_active_low(PinNo, Mode) ->
 gpio_filename(PinNo, FileName) ->
     string:join(["/sys/class/gpio/gpio", integer_to_list(PinNo), 
 		 "/", FileName], "").
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc API file for pullup pulldown string, on Galileo.
+%% @end
+%%--------------------------------------------------------------------
+-spec drive_file(non_neg_integer()) -> string().
+drive_file(PinNo) ->
+    file_exist(gpio_filename(PinNo, "drive")).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Return true if drive file exist (equal use Galileo).
+%% @end
+%%--------------------------------------------------------------------
+-spec drive_file_exist(non_neg_integer()) -> boolean().
+drive_file_exist(PinNo) ->
+    file_exist(drive_file(PinNo)).
     
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Set pull mode to GPIO pin.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_pull(Mode, PinNo) -> ok when
+      Mode :: pullup | pulldown | pullnone | strong,
+      PinNo :: non_neg_integer().
+set_pull(Mode, PinNo) ->
+    case drive_file_exist(PinNo) of %% Galileo
+	true ->
+	    FileName = drive_file(PinNo),
+	    {ok, FileIO} = file:open(FileName, [write]),
+	    ok = file:write(FileIO, atom_to_list(Mode)),
+	    ok = file:close(FileIO);
+	false ->
+	    case Mode of
+		pullup   -> gpio_port:pullup(PinNo);
+		pulldown -> gpio_port:pulldown(PinNo);
+		pullnone -> gpio_port:pullnone(PinNo)
+	    end
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Return true if file exist, return false otherwise.
+%% @end
+%%--------------------------------------------------------------------
+-spec file_exist(FilePath) -> boolean() when
+      FilePath :: file:name_all().
+file_exist(FilePath) ->
+    filelib:is_regular(FilePath).
