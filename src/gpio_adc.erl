@@ -33,9 +33,12 @@
 %% @doc
 %% Starts the server
 %%
-%% @spec start_link(non_neg_integer()) -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
+-spec start_link(non_neg_integer(), non_neg_integer()) -> {ok, pid()}    |
+							  ignore         |
+							  {error, term()}.
+      
 start_link(AnalogNo, AnalogInterval) when is_integer(AnalogNo),
 					  is_integer(AnalogInterval) ->
     gen_server:start_link(?MODULE, [AnalogNo, AnalogInterval], []).

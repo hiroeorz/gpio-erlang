@@ -47,7 +47,7 @@ mode() = in | out
 ## Function Index ##
 
 
-<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#all_digital-0">all_digital/0</a></td><td>get status list.</td></tr><tr><td valign="top"><a href="#digital_change_notify-1">digital_change_notify/1</a></td><td>receive digital state change notify from gpio_port.</td></tr><tr><td valign="top"><a href="#get_active_low-1">get_active_low/1</a></td><td>get active low from a pin.</td></tr><tr><td valign="top"><a href="#pulldown-1">pulldown/1</a></td><td>set pulldown to a pin.</td></tr><tr><td valign="top"><a href="#pullnone-1">pullnone/1</a></td><td>release pin mode from pullup pulldown.</td></tr><tr><td valign="top"><a href="#pullup-1">pullup/1</a></td><td>set pullup to a pin.</td></tr><tr><td valign="top"><a href="#read-1">read/1</a></td><td>read gpio value.</td></tr><tr><td valign="top"><a href="#set_active_low-2">set_active_low/2</a></td><td>set active low to a pin.</td></tr><tr><td valign="top"><a href="#set_int-2">set_int/2</a></td><td>set interrupt that fire when gpio's input or output status is chaned.</td></tr><tr><td valign="top"><a href="#set_pin_mode-2">set_pin_mode/2</a></td><td>set pin mode, in or out.</td></tr><tr><td valign="top"><a href="#start_link-1">start_link/1</a></td><td>Starts the server.</td></tr><tr><td valign="top"><a href="#write-2">write/2</a></td><td>write value to gpio.</td></tr></table>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#all_digital-0">all_digital/0</a></td><td>get status list.</td></tr><tr><td valign="top"><a href="#digital_change_notify-1">digital_change_notify/1</a></td><td>receive digital state change notify from gpio_port.</td></tr><tr><td valign="top"><a href="#export-1">export/1</a></td><td>export gpio.</td></tr><tr><td valign="top"><a href="#get_active_low-1">get_active_low/1</a></td><td>get active low from a pin.</td></tr><tr><td valign="top"><a href="#gpio_filename-2">gpio_filename/2</a></td><td>gpio device file name.</td></tr><tr><td valign="top"><a href="#pulldown-1">pulldown/1</a></td><td>set pulldown to a pin.</td></tr><tr><td valign="top"><a href="#pullnone-1">pullnone/1</a></td><td>release pin mode from pullup pulldown.</td></tr><tr><td valign="top"><a href="#pullup-1">pullup/1</a></td><td>set pullup to a pin.</td></tr><tr><td valign="top"><a href="#read-1">read/1</a></td><td>read gpio value.</td></tr><tr><td valign="top"><a href="#set_active_low-2">set_active_low/2</a></td><td>set active low to a pin.</td></tr><tr><td valign="top"><a href="#set_int-2">set_int/2</a></td><td>set interrupt that fire when gpio's input or output status is chaned.</td></tr><tr><td valign="top"><a href="#set_mode-2">set_mode/2</a></td><td>set open mode, in or out.</td></tr><tr><td valign="top"><a href="#set_pin_mode-2">set_pin_mode/2</a></td><td>set pin mode, in or out.</td></tr><tr><td valign="top"><a href="#start_link-1">start_link/1</a></td><td>Starts the server.</td></tr><tr><td valign="top"><a href="#unexport-1">unexport/1</a></td><td>unexport gpio.</td></tr><tr><td valign="top"><a href="#write-2">write/2</a></td><td>write value to gpio.</td></tr></table>
 
 
 <a name="functions"></a>
@@ -78,6 +78,18 @@ example: [0,1,1,0,0,0,0,0]
 `digital_change_notify(PinNo) -> any()`
 
 receive digital state change notify from gpio_port.
+<a name="export-1"></a>
+
+### export/1 ###
+
+
+<pre><code>
+export(PinNo) -&gt; ok
+</code></pre>
+
+<ul class="definitions"><li><code>PinNo = non_neg_integer()</code></li></ul>
+
+export gpio.
 <a name="get_active_low-1"></a>
 
 ### get_active_low/1 ###
@@ -95,6 +107,19 @@ get active low from a pin.
 
 Mode=0: 通電時のread/1の結果は 通電->1 解放->0 (デフォルト)
 Mode=1: 通電時のread/1の結果は 通電->0 解放->1
+<a name="gpio_filename-2"></a>
+
+### gpio_filename/2 ###
+
+
+<pre><code>
+gpio_filename(PinNo::non_neg_integer(), FileName::string()) -&gt; string()
+</code></pre>
+
+<br></br>
+
+
+gpio device file name.
 <a name="pulldown-1"></a>
 
 ### pulldown/1 ###
@@ -187,6 +212,18 @@ set_int(PinNo, Mode) -&gt; ok | {error, Reason}
 <ul class="definitions"><li><code>PinNo = non_neg_integer()</code></li><li><code>Mode = <a href="#type-edge">edge()</a></code></li><li><code>Reason = term()</code></li></ul>
 
 set interrupt that fire when gpio's input or output status is chaned.
+<a name="set_mode-2"></a>
+
+### set_mode/2 ###
+
+
+<pre><code>
+set_mode(PinNo, Mode) -&gt; ok
+</code></pre>
+
+<ul class="definitions"><li><code>PinNo = non_neg_integer()</code></li><li><code>Mode = <a href="#type-mode">mode()</a></code></li></ul>
+
+set open mode, in or out.
 <a name="set_pin_mode-2"></a>
 
 ### set_pin_mode/2 ###
@@ -211,6 +248,18 @@ start_link(X1::{PinNo, Mode} | {PinNo, Mode, Opts}) -&gt; {ok, Pid} | ignore | {
 <ul class="definitions"><li><code>PinNo = non_neg_integer()</code></li><li><code>Mode = <a href="#type-mode">mode()</a></code></li><li><code>Opts = [tuple()]</code></li><li><code>Pid = pid()</code></li><li><code>Error = term()</code></li></ul>
 
 Starts the server
+<a name="unexport-1"></a>
+
+### unexport/1 ###
+
+
+<pre><code>
+unexport(PinNo) -&gt; ok
+</code></pre>
+
+<ul class="definitions"><li><code>PinNo = non_neg_integer()</code></li></ul>
+
+unexport gpio.
 <a name="write-2"></a>
 
 ### write/2 ###
