@@ -23,6 +23,8 @@
          set_active_low/2,
          all_digital/0]).
 
+-export([export/1, unexport/1, set_mode/2, gpio_filename/2]).
+
 %% fort receive inturrupt
 -export([digital_change_notify/1]).
 
@@ -193,6 +195,58 @@ all_digital([{PinNo, _Mode, _Opts} | Tail], Result) ->
 %%--------------------------------------------------------------------
 digital_change_notify(PinNo) ->
     gpio_pin_db:update_digital_pin(PinNo, read(PinNo)).
+
+%%%===================================================================
+%%% Private API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc unexport gpio.
+%% @end
+%%--------------------------------------------------------------------
+-spec unexport(PinNo) -> ok when
+      PinNo :: non_neg_integer().
+unexport(PinNo) ->
+    {ok, FileIO} = file:open("/sys/class/gpio/unexport", [write]),
+    case file:write(FileIO, io_lib:format("~w", [PinNo])) of
+	ok -> ok;
+	{error, einval} -> ok %% not exported.
+    end,
+    ok = file:close(FileIO).
+
+%%--------------------------------------------------------------------
+%% @doc export gpio.
+%% @end
+%%--------------------------------------------------------------------
+-spec export(PinNo) -> ok when
+      PinNo :: non_neg_integer().
+export(PinNo) ->
+    {ok, FileIO} = file:open("/sys/class/gpio/export", [write]),
+    ok = file:write(FileIO, io_lib:format("~w", [PinNo])),
+    ok = file:close(FileIO).
+
+%%--------------------------------------------------------------------
+%% @doc set open mode, in or out.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_mode(PinNo, Mode) -> ok when
+      PinNo :: non_neg_integer(),
+      Mode :: mode().
+set_mode(PinNo, Mode) when Mode =:= in orelse
+			   Mode =:= out ->
+    FileName = gpio_filename(PinNo, "direction"),
+    {ok, FileIO} = file:open(FileName, [write]),
+    ok = file:write(FileIO, atom_to_list(Mode)),
+    ok = file:close(FileIO).    
+
+%%--------------------------------------------------------------------
+%% @doc gpio device file name.
+%% @end
+%%--------------------------------------------------------------------
+-spec gpio_filename(non_neg_integer(), string()) -> string().
+gpio_filename(PinNo, FileName) ->
+    string:join(["/sys/class/gpio/gpio", integer_to_list(PinNo), 
+		 "/", FileName], "").
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -395,19 +449,6 @@ get_child(PinNo) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @private
-%% @doc read row data from device file.
-%% @end
-%%--------------------------------------------------------------------
--spec read_row(FileIO) -> ok | {error, Reason} when
-      FileIO :: file:device_io(),
-      Reason :: term().
-read_row(FileIO) ->
-    {ok, 0} = file:position(FileIO, 0),
-    file:read(FileIO, 1).
-
-%%--------------------------------------------------------------------
-%% @private
 %% @doc open device file.
 %% @end
 %%--------------------------------------------------------------------
@@ -426,45 +467,15 @@ open(PinNo, Mode) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc unexport gpio.
+%% @doc read row data from device file.
 %% @end
 %%--------------------------------------------------------------------
--spec unexport(PinNo) -> ok when
-      PinNo :: non_neg_integer().
-unexport(PinNo) ->
-    {ok, FileIO} = file:open("/sys/class/gpio/unexport", [write]),
-    case file:write(FileIO, io_lib:format("~w", [PinNo])) of
-	ok -> ok;
-	{error, einval} -> ok %% not exported.
-    end,
-    ok = file:close(FileIO).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc export gpio.
-%% @end
-%%--------------------------------------------------------------------
--spec export(PinNo) -> ok when
-      PinNo :: non_neg_integer().
-export(PinNo) ->
-    {ok, FileIO} = file:open("/sys/class/gpio/export", [write]),
-    ok = file:write(FileIO, io_lib:format("~w", [PinNo])),
-    ok = file:close(FileIO).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc set open mode, in or out.
-%% @end
-%%--------------------------------------------------------------------
--spec set_mode(PinNo, Mode) -> ok when
-      PinNo :: non_neg_integer(),
-      Mode :: mode().
-set_mode(PinNo, Mode) when Mode =:= in orelse
-			   Mode =:= out ->
-    FileName = gpio_filename(PinNo, "direction"),
-    {ok, FileIO} = file:open(FileName, [write]),
-    ok = file:write(FileIO, atom_to_list(Mode)),
-    ok = file:close(FileIO).    
+-spec read_row(FileIO) -> ok | {error, Reason} when
+      FileIO :: file:device_io(),
+      Reason :: term().
+read_row(FileIO) ->
+    {ok, 0} = file:position(FileIO, 0),
+    file:read(FileIO, 1).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -527,22 +538,12 @@ write_active_low(PinNo, Mode) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc gpio device file name.
-%% @end
-%%--------------------------------------------------------------------
--spec gpio_filename(non_neg_integer(), string()) -> string().
-gpio_filename(PinNo, FileName) ->
-    string:join(["/sys/class/gpio/gpio", integer_to_list(PinNo), 
-		 "/", FileName], "").
-
-%%--------------------------------------------------------------------
-%% @private
 %% @doc API file for pullup pulldown string, on Galileo.
 %% @end
 %%--------------------------------------------------------------------
 -spec drive_file(non_neg_integer()) -> string().
 drive_file(PinNo) ->
-    file_exist(gpio_filename(PinNo, "drive")).
+    gpio_filename(PinNo, "drive").
 
 %%--------------------------------------------------------------------
 %% @private

@@ -11,7 +11,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0, start_link/2, start_link/3]).
+-export([start_link/0, start_link/4, start_link/5]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -26,19 +26,24 @@
       Error :: term().
 start_link() ->
     {ok, IOList} = application:get_env(gpio, gpio),
+    {ok, AnalogList} = application:get_env(gpio, analog_list),
+    {ok, AnalogInterval} = application:get_env(gpio, analog_interval),
     EventHandlers = [ {gpio_sample_event_handler, []} ],
-    start_link(IOList, EventHandlers).
+    start_link(IOList, AnalogList, AnalogInterval, EventHandlers).
 
--spec start_link(IOList,  EventHandlers) -> {ok, Pid}     |
-					    ignore        |
-					    {error, Error} when
+-spec start_link(IOList, AnalogList,  AnalogInterval, EventHandlers) ->
+			{ok, Pid}     |
+			ignore        |
+			{error, Error} when
       IOList :: [ {non_neg_integer(), in | out} ],
+      AnalogList :: [non_neg_integer()],
+      AnalogInterval :: pos_integer(),
       EventHandlers :: [atom()],
       Pid :: pid(),
       Error :: term().
-start_link(IOList,  EventHandlers) ->
+start_link(IOList, AnalogList, AnalogInterval, EventHandlers) ->
     {ok, C_Node} = application:get_env(gpio, c_node),
-    start_link(IOList,  EventHandlers, C_Node).
+    start_link(IOList, AnalogList, AnalogInterval, EventHandlers, C_Node).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -46,17 +51,21 @@ start_link(IOList,  EventHandlers) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec start_link(IOList,  EventHandlers, C_Node) -> {ok, Pid}     |
-						    ignore        |
-						    {error, Error} when
+-spec start_link(IOList, AnalogList, AnalogInterval, EventHandlers, C_Node) -> 
+			{ok, Pid}     |
+			ignore        |
+			{error, Error} when
       IOList :: [ {non_neg_integer(), in | out} ],
+      AnalogList :: [non_neg_integer()],
+      AnalogInterval :: pos_integer(),
       EventHandlers :: [atom()],
       C_Node :: atom(),
       Pid :: pid(),
       Error :: term().
-start_link(IOList,  EventHandlers, C_Node) ->
+start_link(IOList, AnalogList, AnalogInterval, EventHandlers, C_Node) ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, 
-			  [IOList, EventHandlers, C_Node]).
+			  [IOList, AnalogList, AnalogInterval, 
+			   EventHandlers, C_Node]).
 
 %%%===================================================================
 %%% Supervisor callbacks
@@ -75,14 +84,14 @@ start_link(IOList,  EventHandlers, C_Node) ->
 %%                     {error, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([IOList, EventHandlers, C_Node]) ->
+init([IOList, AnalogList, AnalogInterval, EventHandlers, C_Node]) ->
     RestartStrategy = one_for_one,
     MaxRestarts = 1000,
     MaxSecondsBetweenRestarts = 3600,
 
     Childs = 
 	[port_spec(C_Node)] ++ [db_child(IOList), event_spec(EventHandlers)] ++
-	child_list(IOList),
+	child_list(IOList) ++ gpio_adc_list(AnalogList, AnalogInterval),
 
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
     {ok, {SupFlags, Childs}}.
@@ -90,6 +99,15 @@ init([IOList, EventHandlers, C_Node]) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+gpio_adc_list(AnalogList, AnalogInterval) ->
+    Restart = permanent,
+    Shutdown = 2000,
+    Type = worker,
+
+    [ {{gpio_adc, AnalogNo}, {gpio_adc, start_link, [AnalogNo, AnalogInterval]},
+       Restart, Shutdown, Type, [gpio_adc]}
+      || AnalogNo <- AnalogList ].
 
 event_spec(EventHandlers) ->
     Restart = permanent,
