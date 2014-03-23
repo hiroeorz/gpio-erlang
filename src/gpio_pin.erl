@@ -286,6 +286,7 @@ init([{PinNo, Mode, Opts}]) ->
     end,
 
     case Edge of
+	undefined -> undefined;
 	none -> undefined;
 	Edge when Edge =:= rising orelse
 		  Edge =:= falling orelse
