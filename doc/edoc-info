@@ -1,5 +1,5 @@
 %% encoding: UTF-8
 {application,edown}.
 {packages,[]}.
-{modules,[gpio_adc,gpio_app,gpio_pin,gpio_pin_db,gpio_pin_event,gpio_port,
-          gpio_sample_event_handler,gpio_sup]}.
+{modules,[gpio,gpio_adc,gpio_app,gpio_pin,gpio_pin_db,gpio_pin_event,
+          gpio_port,gpio_sample_event_handler,gpio_sup]}.

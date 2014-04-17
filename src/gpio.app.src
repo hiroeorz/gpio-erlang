@@ -30,11 +30,10 @@
                  {27, out, [{edge, both}, {pull, down}] }
                 ]},
 
-         {analog_list, [0, 1, 2, 3, 4, 5]},
-         {analog_interval, 3000},
+         %% Enable on Galileo
+         %%{analog_list, [0, 1, 2, 3, 4, 5]},
 
-         %% driver node node name
-         %% c1@ is fixed. change your hostname part of 'raspberrypi'.
-         {c_node, c1@raspberrypi}
+         {analog_list, []},
+         {analog_interval, 3000}
         ]}
  ]}.

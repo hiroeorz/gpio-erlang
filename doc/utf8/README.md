@@ -7,6 +7,7 @@
 
 
 <table width="100%" border="0" summary="list of modules">
+<tr><td><a href="gpio.md" class="module">gpio</a></td></tr>
 <tr><td><a href="gpio_adc.md" class="module">gpio_adc</a></td></tr>
 <tr><td><a href="gpio_app.md" class="module">gpio_app</a></td></tr>
 <tr><td><a href="gpio_pin.md" class="module">gpio_pin</a></td></tr>

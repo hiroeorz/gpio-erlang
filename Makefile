@@ -30,7 +30,7 @@ edoc:
 	@$(EDOWN)
 
 dialyzer: compile
-	@$(DIALYZER) ebin deps/serial/ebin
+	@$(DIALYZER) ebin
 
 setup-dialyzer:
 	@$(DIALYZER) --build_plt \

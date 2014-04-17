@@ -11,7 +11,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0, start_link/4, start_link/5]).
+-export([start_link/0, start_link/4]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -31,7 +31,13 @@ start_link() ->
     EventHandlers = [ {gpio_sample_event_handler, []} ],
     start_link(IOList, AnalogList, AnalogInterval, EventHandlers).
 
--spec start_link(IOList, AnalogList,  AnalogInterval, EventHandlers) ->
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts the supervisor
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec start_link(IOList, AnalogList, AnalogInterval, EventHandlers) -> 
 			{ok, Pid}     |
 			ignore        |
 			{error, Error} when
@@ -42,30 +48,8 @@ start_link() ->
       Pid :: pid(),
       Error :: term().
 start_link(IOList, AnalogList, AnalogInterval, EventHandlers) ->
-    {ok, C_Node} = application:get_env(gpio, c_node),
-    start_link(IOList, AnalogList, AnalogInterval, EventHandlers, C_Node).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Starts the supervisor
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec start_link(IOList, AnalogList, AnalogInterval, EventHandlers, C_Node) -> 
-			{ok, Pid}     |
-			ignore        |
-			{error, Error} when
-      IOList :: [ {non_neg_integer(), in | out} ],
-      AnalogList :: [non_neg_integer()],
-      AnalogInterval :: pos_integer(),
-      EventHandlers :: [atom()],
-      C_Node :: atom(),
-      Pid :: pid(),
-      Error :: term().
-start_link(IOList, AnalogList, AnalogInterval, EventHandlers, C_Node) ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, 
-			  [IOList, AnalogList, AnalogInterval, 
-			   EventHandlers, C_Node]).
+			  [IOList, AnalogList, AnalogInterval, EventHandlers]).
 
 %%%===================================================================
 %%% Supervisor callbacks
@@ -84,13 +68,13 @@ start_link(IOList, AnalogList, AnalogInterval, EventHandlers, C_Node) ->
 %%                     {error, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([IOList, AnalogList, AnalogInterval, EventHandlers, C_Node]) ->
+init([IOList, AnalogList, AnalogInterval, EventHandlers]) ->
     RestartStrategy = one_for_one,
     MaxRestarts = 1000,
     MaxSecondsBetweenRestarts = 3600,
 
     Childs = 
-	[port_spec(C_Node)] ++ [db_child(IOList), event_spec(EventHandlers)] ++
+	[port_spec(), db_child(IOList), event_spec(EventHandlers)] ++
 	child_list(IOList) ++ gpio_adc_list(AnalogList, AnalogInterval),
 
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
@@ -117,12 +101,12 @@ event_spec(EventHandlers) ->
     {gpio_pin_event, {gpio_pin_event, start_link, [EventHandlers]},
      Restart, Shutdown, Type, [gpio_port]}.
 
-port_spec(C_Node) ->
+port_spec() ->
     Restart = permanent,
     Shutdown = 2000,
     Type = worker,
 
-    {gpio_port, {gpio_port, start_link, [C_Node]},
+    {gpio_port, {gpio_port, start_link, []},
      Restart, Shutdown, Type, [gpio_port]}.
 
 db_child(IOList) ->

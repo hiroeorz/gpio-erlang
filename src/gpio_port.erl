@@ -8,165 +8,92 @@
 %%%-------------------------------------------------------------------
 -module(gpio_port).
 
--behaviour(gen_server).
-
 %% API
--export([start_link/1,
-	 start_poll/2,
+-export([start_link/0, stop/0, init/1]).
+-export([start_poll/2,
 	 pullup/1,
 	 pulldown/1,
 	 pullnone/1]).
 
-%% gen_server callbacks
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-	 terminate/2, code_change/3]).
+-export([foo/1, bar/1]).
 
 -define(SERVER, ?MODULE).
+-define(GPIO_DRIVER, "gpio_drv").
+-define(PULL_NONE, 0).
+-define(PULL_DOWN, 1).
+-define(PULL_UP, 2).
 
--record(state, {pid_dict = dict:new() :: dict(),
-		c_node                :: atom(),
-		gpio                  :: [tuple()] }).
+start_link() ->
+    case erl_ddll:load_driver(priv_dir(), ?GPIO_DRIVER) of
+	ok -> ok;
+	{error, already_loaded} -> ok;
+	_ -> exit({error, could_not_load_driver})
+    end,
+    proc_lib:start_link(?MODULE, init, [[self(), ?GPIO_DRIVER]]).
 
-%%%===================================================================
-%%% API
-%%%===================================================================
+init([Parent, SharedLib]) ->
+    register(?SERVER, self()),
+    Port = open_port({spawn, SharedLib}, []),
+    proc_lib:init_ack(Parent, {ok, self()}),
+    loop(Port).
 
-%%--------------------------------------------------------------------
-%% @doc Starts the server
-%% @end
-%%--------------------------------------------------------------------
--spec start_link(atom()) -> {ok, pid()} | ignore | {error, term()}.
-start_link(C_Node) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [C_Node], []).
+stop() ->
+    ?SERVER ! stop.
+
+foo(X) ->
+    call_port({foo, X}).
+
+bar(Y) ->
+    call_port({bar, Y}).
 
 start_poll(PinNo, Mode) ->
-    gen_server:call(?SERVER, {start_poll, PinNo, Mode}).    
+    case call_port({start_poll, PinNo, Mode}) of
+	1 -> ok;
+	_ -> {error, start_poll_failed}
+    end.
 
 pullup(PinNo) ->
-    gen_server:call(?SERVER, {pullup_down, PinNo, pullup}).
+    call_port({pullup_down, PinNo, pullup}).
 
 pulldown(PinNo) ->
-    gen_server:call(?SERVER, {pullup_down, PinNo, pulldown}).
+    call_port({pullup_down, PinNo, pulldown}).
 
 pullnone(PinNo) ->
-    gen_server:call(?SERVER, {pullup_down, PinNo, none}).
+    call_port({pullup_down, PinNo, none}).
 
-%%%===================================================================
-%%% gen_server callbacks
-%%%===================================================================
+call_port(Msg) ->
+    io:format("row MSG: ~p~n", [Msg]),
+    ?SERVER ! {call, self(), Msg},
+    receive
+	{?SERVER, Result} -> Result
+    end.
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Initializes the server
-%%
-%% @spec init(Args) -> {ok, State} |
-%%                     {ok, State, Timeout} |
-%%                     ignore |
-%%                     {stop, Reason}
-%% @end
-%%--------------------------------------------------------------------
-init([C_Node]) ->
-    _Pid = spawn_link(fun() ->
-			      CmdPass = priv_dir() ++ "/gpio_lib",
-			      os:cmd("killall " ++ "gpio_lib"),
-			      os:cmd(CmdPass),
-			      erlang:error(port_process_down)
-		      end),
+loop(Port) ->
+    receive
+	{call, Caller, Msg} ->
+	    io:format("MSG: ~p~n", [encode(Msg)]),
+	    Port ! {self(), {command, encode(Msg)}},
+	    receive
+		{Port, {data, Data}} -> Caller ! {?SERVER, decode(Data)}
+	    end,
+	    loop(Port);
 
-    {ok, #state{c_node = C_Node}}.
+	{Port, {data, Data}} ->
+	    io:format("interrupt! ~p~n", [Data]);
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Handling call messages
-%%
-%% @spec handle_call(Request, From, State) ->
-%%                                   {reply, Reply, State} |
-%%                                   {reply, Reply, State, Timeout} |
-%%                                   {noreply, State} |
-%%                                   {noreply, State, Timeout} |
-%%                                   {stop, Reason, Reply, State} |
-%%                                   {stop, Reason, State}
-%% @end
-%%--------------------------------------------------------------------
-handle_call({start_poll, PinNo, Mode}, From, State) ->
-    Ref = make_ref(),
-    C_Node = State#state.c_node,
-    {any, C_Node} ! {call, self(), Ref, {start_poll, PinNo, Mode}},
+	stop ->
+	    Port ! {self(), close},
+	    receive
+		{Port, closed} -> exit(normal)
+	    end;
 
-    NewDict = dict:store(Ref, From, State#state.pid_dict),
-    {noreply, State#state{pid_dict = NewDict}};
+	{'EXIT', Port, Reason} ->
+	    io:format("~p ~n", [Reason]),
+	    exit(port_terminated);
 
-handle_call({pullup_down, PinNo, Mode}, From, State) ->
-    Ref = make_ref(),
-    C_Node = State#state.c_node,
-    {any, C_Node} ! {call, self(), Ref, {pullup_down, PinNo, Mode}},
-
-    NewDict = dict:store(Ref, From, State#state.pid_dict),
-    {noreply, State#state{pid_dict = NewDict}}.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Handling cast messages
-%%
-%% @spec handle_cast(Msg, State) -> {noreply, State} |
-%%                                  {noreply, State, Timeout} |
-%%                                  {stop, Reason, State}
-%% @end
-%%--------------------------------------------------------------------
-handle_cast(_Msg, State) ->
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Handling all non call/cast messages
-%%
-%% @spec handle_info(Info, State) -> {noreply, State} |
-%%                                   {noreply, State, Timeout} |
-%%                                   {stop, Reason, State}
-%% @end
-%%--------------------------------------------------------------------
-handle_info({Ref, Reply}, State) ->
-    {ok, From} = dict:find(Ref, State#state.pid_dict),
-    NewDict = dict:erase(Ref, State#state.pid_dict),
-    gen_server:reply(From, Reply),
-    {noreply, State#state{pid_dict = NewDict}};
-
-handle_info({gpio_changed, PinNo, _Edge}, State) ->
-    gpio_pin:digital_change_notify(PinNo),
-    {noreply, State};
-
-handle_info(Info, State) ->
-    io:format("unknown message recieved: ~p~n", [Info]),
-    {noreply, State}.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% This function is called by a gen_server when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any
-%% necessary cleaning up. When it returns, the gen_server terminates
-%% with Reason. The return value is ignored.
-%%
-%% @spec terminate(Reason, State) -> void()
-%% @end
-%%--------------------------------------------------------------------
-terminate(_Reason, _State) ->
-    ok.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Convert process state when code is changed
-%%
-%% @spec code_change(OldVsn, State, Extra) -> {ok, NewState}
-%% @end
-%%--------------------------------------------------------------------
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+	Other ->
+	    io:format("unknown message: ~p~n", [Other])
+    end.
 
 %%%===================================================================
 %%% Internal functions
@@ -179,3 +106,14 @@ priv_dir() ->
 	D ->
 	    D
     end.
+
+encode({foo, X}) -> [1, X];
+encode({bar, Y}) -> [2, Y];
+encode({start_poll, Pin, rising})    -> [3, Pin, 1];
+encode({start_poll, Pin, falling})   -> [3, Pin, 2];
+encode({start_poll, Pin, both})      -> [3, Pin, 3];
+encode({pullup_down, Pin, none})     -> [4, Pin, ?PULL_NONE];
+encode({pullup_down, Pin, pulldown}) -> [4, Pin, ?PULL_DOWN];
+encode({pullup_down, Pin, pullup})   -> [4, Pin, ?PULL_UP].
+
+decode([Int]) -> Int.
