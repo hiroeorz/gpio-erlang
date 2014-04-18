@@ -34,13 +34,25 @@
 
 static pthread_t isr_handler_thread;
 static int isr_handler_flag;
-//static int fd_erlang_node;
 
 typedef struct {
    int pin;
    void (*isr) (int pin, int mode);
    int mode;
 } isr_t;
+
+typedef struct {
+  ErlDrvPort port;
+} gpio_data;
+
+typedef struct {
+  char fn;
+  char arg1;
+  char arg2;
+  char res;
+} gpio_async_data;
+
+static ErlDrvPort drv_port;
 
 int
 pthread_tryjoin_np(pthread_t thread, void **retval);
@@ -58,7 +70,7 @@ int
 gpio_pullup_down(int pin, int mode);
 
 int
-gpio_start_poll (int pin, int mode, void (*isr));
+gpio_start_poll (int pin, int mode);
 
 void
 handle_gpio_interrupt (int pin, int mode);
@@ -172,13 +184,19 @@ gpio_pullup_down(int pin, int mode)
   return 1;
 }
 
+void
+async_gpio_pullup_down(void * async_data) {
+  gpio_async_data* d = (gpio_async_data*)async_data;
+  d->res = gpio_pullup_down(d->arg1, d->arg2);
+}
+
 int
-gpio_start_poll (int pin, int mode, void (*isr))
+gpio_start_poll (int pin, int mode)
 {
   /* Details of the ISR */
   isr_t *i = (isr_t *) malloc (sizeof (isr_t));
   i->pin = pin;
-  i->isr = isr;
+  i->isr = handle_gpio_interrupt;
   i->mode = mode;
 
   /* Set isr_handler flag and create thread
@@ -190,12 +208,24 @@ gpio_start_poll (int pin, int mode, void (*isr))
 }
 
 void
-handle_gpio_interrupt (int pin, int mode) {
-  debug("inside handle_gpio_interrupt\n\r");
-  debug("pin: %d, mode: %d\n\r", pin, mode);
+async_gpio_start_poll(void * async_data) {
+  gpio_async_data* d = (gpio_async_data*)async_data;
+  d->res = gpio_start_poll(d->arg1, d->arg2);
+}
 
-//ETERM* resp = erl_format("{gpio_changed, ~w, ~w}", pinp, modep);
-// erl_send(fd_erlang_node, pidp, resp);
+
+void
+handle_gpio_interrupt (int pin, int mode) {
+  ErlDrvTermData spec[] = {
+    ERL_DRV_ATOM, driver_mk_atom("gpio_changed"),
+    ERL_DRV_PORT, driver_mk_port(drv_port),
+    ERL_DRV_INT, pin,
+    ERL_DRV_INT, mode,
+    ERL_DRV_TUPLE, 4,
+  };
+		  
+  erl_drv_output_term(driver_mk_port(drv_port), 
+		      spec, sizeof(spec) / sizeof(spec[0]));
 }
 
 /* taken from https://github.com/omerk/pihwm/blob/master/lib/pi_gpio.c */
@@ -238,7 +268,7 @@ isr_handler (void *isr) {
 	      /* debug ("poll() timeout.\n"); */
 	      if (isr_handler_flag == 0)
 		{
-		  debug ("exiting isr_handler (timeout)"); 
+		  debug ("exiting isr_handler (timeout)\n"); 
 		  pthread_exit (NULL);
 		}
 	    }
@@ -248,7 +278,7 @@ isr_handler (void *isr) {
 	      /* We have an interrupt! */
 	      if (-1 == read (fdset[0].fd, buf, 64))
 		{
-		  debug ("read failed for interrupt"); 
+		  //debug ("read failed for interrupt\n"); 
 		  return (void *) -1;
 		}
 
@@ -286,7 +316,7 @@ gpio_valfd (int pin)
 }
 
 /*************************************************************************
- # Port Driver API 
+ # Port Driver Debug API 
  ************************************************************************/
 
 int
@@ -294,42 +324,71 @@ foo(int x) {
   return x * x;
 }
 
+void
+async_foo(void * async_data) {
+  gpio_async_data* d = (gpio_async_data*)async_data;
+  d->res = foo(d->arg1);
+}
+
 int
 bar(int x) {
   return x + x;
 }
 
-typedef struct {
-  ErlDrvPort port;
-} gpio_data;
+void
+async_bar(void * async_data) {
+  gpio_async_data* d = (gpio_async_data*)async_data;
+  d->res = bar(d->arg1);
+}
 
-static ErlDrvData gpio_drv_start(ErlDrvPort port, char *buff)
+/*************************************************************************
+ # Port Driver API 
+ ************************************************************************/
+
+static ErlDrvData
+gpio_drv_start(ErlDrvPort port, char *buff)
 {
   gpio_init();
   gpio_data* d = (gpio_data*)driver_alloc(sizeof(gpio_data));
+  drv_port = port;
   d->port = port;
   return (ErlDrvData)d;
 }
 
-static void gpio_drv_stop(ErlDrvData handle)
+static void
+gpio_drv_stop(ErlDrvData handle)
 {
   driver_free((char*)handle);
 }
 
-static void gpio_drv_output(ErlDrvData handle, char *buff, ErlDrvSizeT bufflen)
+static void
+gpio_drv_output(ErlDrvData handle, char *buff, ErlDrvSizeT bufflen)
 {
   gpio_data* d = (gpio_data*)handle;
-  char fn = buff[0], arg1 = buff[1], arg2 = buff[2], res;
+  gpio_async_data* a = (gpio_async_data *)malloc(sizeof(gpio_async_data));
+  a->fn = buff[0];
+  a->arg1 = buff[1];
+  a->arg2 = buff[2];
 
-  switch(fn) {
-  case 1:  res = foo(arg1);                                             break;
-  case 2:  res = bar(arg1);                                             break;
-  case 3:  res = gpio_start_poll(arg1, arg2, handle_gpio_interrupt);    break;
-  case 4:  res = gpio_pullup_down(arg1, arg2);                          break;
-  default: res = -1;
+  switch(a->fn) {
+  case 1: driver_async(d->port, NULL, async_foo, a, free);
+    break;
+  case 2: driver_async(d->port, NULL, async_bar, a, free);
+    break;
+  case 3: driver_async(d->port, NULL, async_gpio_start_poll, a, free);
+    break;
+  case 4: driver_async(d->port, NULL, async_gpio_pullup_down, a, free);
+    break;
   }
+}
 
-  driver_output(d->port, &res, 1);
+static void
+ready_async(ErlDrvData handle, ErlDrvThreadData async_data)
+{
+  gpio_data* d = (gpio_data*)handle;
+  gpio_async_data* a = (gpio_async_data*)async_data;
+  driver_output(d->port, &(a->res), 1);
+  free(a);
 }
 
 ErlDrvEntry gpio_drv_entry = {
@@ -337,15 +396,15 @@ ErlDrvEntry gpio_drv_entry = {
   gpio_drv_start,  /* L_PTR start, called when port is opened */
   gpio_drv_stop,   /* F_PTR stop, called when port is closed */
   gpio_drv_output, /* F_PTR output, called when erlang has sent */
-  NULL,		   /* F_PTR ready_input, called when input descriptor ready */
-  NULL,		   /* F_PTR ready_output, called when output descriptor ready */
-  "gpio_drv",   /* char *driver_name, the argument to open_port */
+  NULL,            /* F_PTR ready_input, called when input descriptor ready */
+  NULL,            /* F_PTR ready_output, called when output descriptor ready */
+  "gpio_drv",      /* char *driver_name, the argument to open_port */
   NULL,		   /* F_PTR finish, called when unloaded */
   NULL,            /* void *handle, Reserved by VM */
   NULL,		   /* F_PTR control, port_command callback */
   NULL,		   /* F_PTR timeout, reserved */
   NULL,		   /* F_PTR outputv, reserved */
-  NULL,            /* F_PTR ready_async, only for async drivers */
+  ready_async,     /* F_PTR ready_async, only for async drivers */
   NULL,            /* F_PTR flush, called when port is about 
 		      to be closed, but there is data in driver queue */
   NULL,            /* F_PTR call, much like control, sync call

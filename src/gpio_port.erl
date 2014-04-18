@@ -33,8 +33,9 @@ start_link() ->
 
 init([Parent, SharedLib]) ->
     register(?SERVER, self()),
-    Port = open_port({spawn, SharedLib}, []),
+    Port = open_port({spawn, SharedLib}, [{packet, 2}]),
     proc_lib:init_ack(Parent, {ok, self()}),
+    timer:send_interval(100, <<"tick">>),
     loop(Port).
 
 stop() ->
@@ -70,6 +71,9 @@ call_port(Msg) ->
 
 loop(Port) ->
     receive
+	<<"tick">> ->
+	    loop(Port);	    
+
 	{call, Caller, Msg} ->
 	    io:format("MSG: ~p~n", [encode(Msg)]),
 	    Port ! {self(), {command, encode(Msg)}},
@@ -78,8 +82,13 @@ loop(Port) ->
 	    end,
 	    loop(Port);
 
+	{gpio_changed, Port, Pin, _Edge} ->
+	    gpio_pin:digital_change_notify(Pin),
+	    loop(Port);
+
 	{Port, {data, Data}} ->
-	    io:format("interrupt! ~p~n", [Data]);
+	    io:format("interrupt! ~p~n", [Data]),
+	    loop(Port);
 
 	stop ->
 	    Port ! {self(), close},
@@ -92,7 +101,8 @@ loop(Port) ->
 	    exit(port_terminated);
 
 	Other ->
-	    io:format("unknown message: ~p~n", [Other])
+	    io:format("unknown message: ~p~n", [Other]),
+	    loop(Port)
     end.
 
 %%%===================================================================
