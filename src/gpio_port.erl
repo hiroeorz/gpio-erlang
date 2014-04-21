@@ -23,6 +23,16 @@
 -define(PULL_DOWN, 1).
 -define(PULL_UP, 2).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc Starts the server
+%% @end
+%%--------------------------------------------------------------------
+-spec start_link() -> term() | {error, Reason} when
+      Reason :: term().
 start_link() ->
     case erl_ddll:load_driver(priv_dir(), ?GPIO_DRIVER) of
 	ok -> ok;
@@ -31,6 +41,12 @@ start_link() ->
     end,
     proc_lib:start_link(?MODULE, init, [[self(), ?GPIO_DRIVER]]).
 
+%%--------------------------------------------------------------------
+%% @doc Initialize and goto receive loop.
+%% @end
+%%--------------------------------------------------------------------
+-spec init(Args) -> no_return() when
+      Args :: list().
 init([Parent, SharedLib]) ->
     register(?SERVER, self()),
     Port = open_port({spawn, SharedLib}, [{packet, 2}]),
@@ -38,44 +54,94 @@ init([Parent, SharedLib]) ->
     timer:send_interval(100, <<"tick">>),
     loop(Port).
 
+%%--------------------------------------------------------------------
+%% @doc Stop server.
+%% @end
+%%--------------------------------------------------------------------
+-spec stop() -> ok.
 stop() ->
     ?SERVER ! stop.
 
+%%--------------------------------------------------------------------
+%% @doc Debug function
+%% @end
+%%--------------------------------------------------------------------
+-spec foo(number()) -> number().
 foo(X) ->
     call_port({foo, X}).
 
+%%--------------------------------------------------------------------
+%% @doc Debug function
+%% @end
+%%--------------------------------------------------------------------
+-spec bar(number()) -> number().
 bar(Y) ->
     call_port({bar, Y}).
 
-start_poll(PinNo, Mode) ->
+%%--------------------------------------------------------------------
+%% @doc Start Polling to pin (exec poll system call in port driver).
+%% @end
+%%--------------------------------------------------------------------
+-spec start_poll(PinNo, Mode) -> ok | {error, start_poll_failed} when
+      PinNo :: non_neg_integer(),
+      Mode :: rising | falling | both.
+start_poll(PinNo, Mode) when is_integer(PinNo), is_atom(Mode) ->
     case call_port({start_poll, PinNo, Mode}) of
 	1 -> ok;
 	_ -> {error, start_poll_failed}
     end.
 
+%%--------------------------------------------------------------------
+%% @doc Pull up pin.
+%% @end
+%%--------------------------------------------------------------------
+-spec pullup(PinNo) -> ok when
+      PinNo :: non_neg_integer().
 pullup(PinNo) ->
     call_port({pullup_down, PinNo, pullup}).
 
+%%--------------------------------------------------------------------
+%% @doc Pull down pin.
+%% @end
+%%--------------------------------------------------------------------
+-spec pulldown(PinNo) -> ok when
+      PinNo :: non_neg_integer().
 pulldown(PinNo) ->
     call_port({pullup_down, PinNo, pulldown}).
 
+%%--------------------------------------------------------------------
+%% @doc Disable pullup and pulldown.
+%% @end
+%%--------------------------------------------------------------------
+-spec pullnone(PinNo) -> ok when
+      PinNo :: non_neg_integer().
 pullnone(PinNo) ->
     call_port({pullup_down, PinNo, none}).
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Disable pullup and pulldown.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_port(term()) -> term().
 call_port(Msg) ->
-    io:format("row MSG: ~p~n", [Msg]),
     ?SERVER ! {call, self(), Msg},
     receive
 	{?SERVER, Result} -> Result
     end.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Receive loop.
+%% @end
+%%--------------------------------------------------------------------
+-spec loop(port()) -> no_return().
 loop(Port) ->
     receive
 	<<"tick">> ->
 	    loop(Port);	    
 
 	{call, Caller, Msg} ->
-	    io:format("MSG: ~p~n", [encode(Msg)]),
 	    Port ! {self(), {command, encode(Msg)}},
 	    receive
 		{Port, {data, Data}} -> Caller ! {?SERVER, decode(Data)}
@@ -86,8 +152,7 @@ loop(Port) ->
 	    gpio_pin:digital_change_notify(Pin),
 	    loop(Port);
 
-	{Port, {data, Data}} ->
-	    io:format("interrupt! ~p~n", [Data]),
+	{Port, {data, _Data}} ->
 	    loop(Port);
 
 	stop ->
